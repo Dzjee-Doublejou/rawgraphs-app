@@ -1,0 +1,56 @@
+name: Docker deployment
+
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'docker-compose.yml'
+      - 'deploy/**'
+      - 'package*.json'
+      - '.npmrc'
+      - 'vite.config.js'
+      - 'index.html'
+      - 'src/**'
+      - 'public/**'
+      - '.github/workflows/docker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate and build Compose
+        run: |
+          docker compose config --quiet
+          docker compose build --pull
+      - name: Start and verify Nginx
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose run -d --name rawgraphs-smoke -p 127.0.0.1:8080:80 rawgraphs
+          for attempt in {1..30}; do
+            if [ "$(docker inspect --format '{{.State.Health.Status}}' rawgraphs-smoke)" = healthy ]; then
+              break
+            fi
+            sleep 2
+          done
+          test "$(docker inspect --format '{{.State.Health.Status}}' rawgraphs-smoke)" = healthy
+          curl -fsS http://127.0.0.1:8080/healthz | grep -qx ok
+          curl -fsS http://127.0.0.1:8080/ > /tmp/home.html
+          curl -fsS http://127.0.0.1:8080/example-client-route > /tmp/route.html
+          cmp /tmp/home.html /tmp/route.html
+          asset=$(grep -oE '/assets/[^"]+\.js' /tmp/home.html | head -1)
+          test -n "$asset"
+          curl -fsS "http://127.0.0.1:8080$asset" -o /dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/assets/missing.js)" = 404
+      - name: Logs and cleanup
+        if: always()
+        run: |
+          docker logs rawgraphs-smoke || true
+          docker rm -f rawgraphs-smoke || true

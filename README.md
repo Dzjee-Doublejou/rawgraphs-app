@@ -21,6 +21,8 @@ The easiest way to use RAWGraphs is by accessing the most updated version on the
 
 ## Installation
 
+For a production container deployment, see [Docker Compose and Coolify](docs/coolify.md).
+
 If you want to run your instance of RAWGraphs locally on your machine, be sure you have the following requirements installed. The following guide is for intermediate users (you will have to open your console and type some commands, it's better if you know what you are doing).
 
 ### Requirements
